@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题
+    url: https://github.com/love-xuexi/offerclaw/security/advisories/new
+    about: 涉及 API Key、简历数据泄漏或 XSS 的问题请私下提交，不要开公开 issue
+  - name: 后续路线
+    url: https://github.com/love-xuexi/offerclaw/blob/main/docs/ROADMAP.md
+    about: 提功能建议前可以先看一眼已经规划了什么

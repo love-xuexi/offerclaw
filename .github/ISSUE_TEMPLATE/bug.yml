@@ -1,0 +1,65 @@
+name: Bug 反馈
+description: 扩展行为不对、报错、或界面显示异常
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请不要在这里贴 API Key、简历原文，或任何截图里带有你个人信息的部分。
+  - type: input
+    id: version
+    attributes:
+      label: 扩展版本
+      description: 见 `chrome://extensions` 上的版本号，或 manifest.json 里的 version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: site
+    attributes:
+      label: 出问题的站点
+      options:
+        - BOSS 直聘 (zhipin.com)
+        - 实习僧 (shixiseng.com)
+        - 51job (51job.com)
+        - LinkedIn (linkedin.com)
+        - 与站点无关（Popup / 选项页）
+    validations:
+      required: true
+  - type: dropdown
+    id: page
+    attributes:
+      label: 页面类型
+      options: [岗位详情页, 岗位列表页/搜索结果页, Popup 看板, 选项页, 其他]
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: LLM 服务商与模型
+      description: 只写服务商和模型名，不要贴 Key
+      placeholder: "硅基流动 / deepseek-ai/DeepSeek-V4-Flash"
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望的行为与实际的行为
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开某个岗位详情页
+        2. 点「开始匹配」
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 控制台报错
+      description: |
+        content script 的报错在页面的 DevTools Console；background 的报错在 `chrome://extensions` → 本扩展 →「检查视图 Service Worker」。
+        贴之前请确认里面没有 Key。
+      render: text

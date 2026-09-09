@@ -1,0 +1,352 @@
+#offerclaw-root {
+  position: fixed;
+  z-index: 2147483647;
+  right: 16px;
+  top: 80px;
+  width: 420px;
+  max-width: calc(100vw - 24px);
+  max-height: min(720px, calc(100vh - 100px));
+  background: #fff;
+  color: #1f2937;
+  font: 14px/1.6 Arial, sans-serif;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #1113;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden
+}
+
+#offerclaw-root * {
+  box-sizing: border-box
+}
+
+#offerclaw-root .oc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: none;
+  padding: 12px 16px;
+  background: #4f46e5;
+  color: #fff;
+  cursor: move;
+  user-select: none
+}
+
+#offerclaw-root .oc-header button {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px
+}
+
+#offerclaw-root .oc-header-buttons {
+  display: flex;
+  gap: 2px
+}
+
+.oc-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 13px
+}
+
+.oc-banner .oc-primary {
+  margin: 0
+}
+
+.oc-error-actions {
+  margin: 4px 0 8px
+}
+
+#offerclaw-root .oc-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden
+}
+
+/* 静默胶囊下没有 body 也没有 banner，收缩宽度避免空框 */
+#offerclaw-root.oc-silent .oc-banner {
+  display: none
+}
+
+#offerclaw-root.oc-collapsed .oc-body {
+  display: none
+}
+
+/* 未识别到岗位的静默胶囊：只留标题栏，点 −/× 之外还能点标题栏展开 */
+#offerclaw-root.oc-silent {
+  width: auto;
+  min-width: 180px
+}
+
+#offerclaw-root.oc-silent .oc-body {
+  display: none
+}
+
+.oc-fixed {
+  flex: none;
+  cursor: move
+}
+
+.oc-job-title {
+  font-size: 17px;
+  font-weight: 700
+}
+
+.oc-meta {
+  color: #6b7280;
+  margin: 4px 0 12px
+}
+
+.oc-description {
+  max-height: 100px;
+  overflow: auto;
+  color: #4b5563
+}
+
+.oc-hint {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  margin: 4px 0 8px;
+  font-size: 12px
+}
+
+.oc-actions {
+  flex: none
+}
+
+.oc-primary,
+.oc-secondary {
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 12px;
+  margin: 4px 4px 4px 0;
+  cursor: pointer
+}
+
+.oc-primary {
+  background: #4f46e5;
+  color: white
+}
+
+.oc-secondary {
+  background: #eef2ff;
+  color: #3730a3
+}
+
+.oc-secondary[disabled],
+.oc-primary[disabled] {
+  opacity: .6;
+  cursor: not-allowed
+}
+
+.oc-result {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin-top: 10px
+}
+
+.oc-progress {
+  color: #4f46e5;
+  margin: 4px 0
+}
+
+.oc-rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px
+}
+
+.oc-rank-bulk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 7px;
+  color: #6b7280;
+  font-size: 12px
+}
+
+.oc-rank-bulk .oc-secondary {
+  margin: 0
+}
+
+.oc-rank-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: start;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px
+}
+
+.oc-rank-link {
+  min-width: 0;
+  color: #1f2937;
+  text-decoration: none
+}
+
+.oc-rank-link:hover {
+  text-decoration: underline
+}
+
+.oc-rank-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column
+}
+
+.oc-rank-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.oc-rank-main small {
+  color: #6b7280;
+  line-height: 1.4
+}
+
+.oc-rank-company {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.oc-rank-salary {
+  white-space: normal
+}
+
+.oc-rank-score {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap
+}
+
+.oc-rank-greet {
+  padding: 4px 7px;
+  white-space: nowrap
+}
+
+.oc-rank-greeting {
+  grid-column: 1/-1
+}
+
+.oc-inline-greeting {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  margin-top: 4px
+}
+
+.oc-inline-greeting textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 60px
+}
+
+.oc-score {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  border: 7px solid var(--score-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin: 8px auto;
+  color: var(--score-color)
+}
+
+.oc-score b {
+  font-size: 24px
+}
+
+.oc-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap
+}
+
+.oc-chip {
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 12px
+}
+
+.oc-chip.good {
+  background: #dcfce7;
+  color: #166534
+}
+
+.oc-chip.bad {
+  background: #fee2e2;
+  color: #991b1b
+}
+
+.oc-greeting {
+  width: 100%;
+  min-height: 90px;
+  margin-top: 8px
+}
+
+.oc-error {
+  color: #b91c1c
+}
+
+.oc-advice {
+  background: #f0f9ff;
+  border-left: 3px solid #4f46e5;
+  padding: 8px 10px;
+  margin: 8px 0;
+  border-radius: 0 6px 6px 0;
+  color: #1e3a8a;
+  font-size: 13px
+}
+
+.oc-advice b {
+  margin-right: 4px
+}
+
+.offerclaw-matched {
+  outline: 2px solid #4f46e5!important;
+  position: relative
+}
+
+.offerclaw-matched::after {
+  content: attr(data-offerclaw-score);
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  padding: 2px 6px;
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 8px;
+  font: bold 12px Arial;
+  z-index: 2
+}

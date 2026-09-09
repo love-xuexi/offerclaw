@@ -1,0 +1,56 @@
+# AGENTS.md — OfferClaw
+
+OfferClaw 是一个面向求职者的 Chrome MV3 浏览器扩展：在招聘网站（BOSS 直聘、实习僧、51job、智联招聘、牛客网、应届生求职网、LinkedIn、Greenhouse、Lever）岗位详情页/列表页提取 JD，调用 OpenAI 兼容 LLM 打匹配分、生成打招呼语，并在 Popup 中管理投递看板；其他任意页面可在看板点「在本页启用」按次注入。
+
+先读 `DESIGN.md`（架构与数据模型）和 `CLAUDE.md`（编码行为准则，改动前必读）；后续优化方向见 `docs/ROADMAP.md`。
+
+## 命令
+
+- 无 package.json、无构建步骤。纯原生 JS，改完代码直接在 `chrome://extensions` 重新加载扩展即可验证。
+- `node scripts/test-messaging.mjs`：mock `chrome.runtime.onMessage` + storage，验证 background 的权限边界——其他扩展发来的消息一律无响应（含 `OPEN_OPTIONS`）、页面里的 content script 调 `GET_CONFIG`/`GET_PROFILE`/`GET_JOBS` 等被拒、`GET_UI_CONFIG` 返回的对象里不含 apiKey/baseUrl/model 且 `hasApiKey` 只是布尔、`onInstalled` 会打开选项页。**改消息路由或加消息类型时必须跑。**
+- `node scripts/test-resume-parse.mjs [简历.pdf]`：简历解析测试（.docx 用脚本内构造的 ZIP 断言 + 真实 PDF 解析 + 错误路径）。PDF 路径由命令行参数或 `OFFERCLAW_TEST_PDF` 提供（仓库里不放真实简历），Node 下还需要 legacy 版 pdf.js（`%TEMP%/pdfjs-tmp/legacy/` 或 `OFFERCLAW_PDFJS_LEGACY` 环境变量，否则跳过 PDF 项）；扩展内 modern 构建的权威验证是浏览器端到端。
+- `node scripts/test-sites.mjs`：站点配置断言——智联/牛客/应届生域名识别、manifest host/matches、选项开关、deepScan 策略与批量 JD 限长。**改 SITES 表或 manifest 站点配置时必须跑。**
+- `node scripts/test-prompts.mjs`：提示词内容断言（领域侧写按 `domain` 切换、锚点领域无关、分站点 JD 限长、批量去 reasons、摘要槽位、matched 注入、jobType 中文化、LinkedIn 英文招呼）。
+- `node scripts/test-scoring.mjs`：mock chrome.storage + fetch，验证批量用简历摘要（哈希缓存/变更重算/失败降级）、单岗位用简历全文。
+- `node scripts/test-llm.mjs`：mock fetch 验证 openai/anthropic 两协议分支的 URL、headers、请求体、响应解析与 401/429/超时错误映射。
+- `node scripts/test-util.mjs`：`src/common/util.js` 的纯函数——CSV 导出（空结果也要有表头）、`safeUrl()`（放行 http/https、挡掉 `javascript:`/`data:`/空值）。
+- `node scripts/gen-icons.mjs`：重新生成 `icons/` 下的 PNG 图标。零依赖（自己写 PNG 编码 + 用 `node:zlib` 压 IDAT），4x 超采样抗锯齿，图形是靛蓝圆角方块 + 三道白色爪痕。**改图形后要看三个尺寸的实际渲染**：16px 只有十几个像素，笔画半径有 `1.0/size` 的下限、间距在 `size<=32` 时会加大，否则三道会粘成一团。
+- `node scripts/pack.mjs`：打包 `dist/offerclaw-v<version>.zip`（供 Release 与商店上传）。只含 `manifest.json` / `LICENSE` / `icons/` / `src/`，`.md` 一律排除但保留 `src/vendor/pdfjs/LICENSE`（pdf.js 是 Apache-2.0，再分发必须带许可）。ZIP 自己写，无第三方依赖。
+- content script 与 popup/options 的 DOM 层没有 Node 测试（本项目不引入 jsdom），改 `panel.js`/`popup.js`/`options.html`/CSS 后必须在 `chrome://extensions` 重新加载扩展、在真实招聘站上人工验证。
+
+## 架构与分层规则
+
+- **background（service worker，ESM）**：`src/background/` 下的文件用 `import` 互相引用，是唯一允许发起 LLM 请求、读取 API Key 的地方。
+- **content scripts（普通脚本，非 ESM）**：`src/content/` 与 `src/common/` 由 manifest 按顺序注入，通过全局对象 `OfferClaw`（如 `OfferClaw.MESSAGES`、`OfferClaw.util`）共享代码，**不能用 import/export**。加载顺序见 `manifest.json` 的 `content_scripts`。
+- **消息协议**：content/popup/options → background 一律走 `chrome.runtime.sendMessage`，background 在 `service-worker.js` 中集中路由，异步响应需 `return true`。新增消息类型时改三处：`src/common/messages.js`（global 版）、`src/background/common.js`（ESM 版），两份常量必须逐条一致；再加 `service-worker.js` 的 switch。
+- **消息权限边界**（改路由前先看这条）：`service-worker.js` 先按发送方拒绝——`sender.id !== chrome.runtime.id` 直接 `return false`（MV3 未声明 `externally_connectable` 时其他已安装扩展仍能发消息进来）；不是本扩展页面发来的（即页面里的 content script）只放行 `PAGE_ALLOWED` 白名单：`GET_UI_CONFIG` / `OPEN_OPTIONS` / `SCORE_JOB` / `SCORE_JOBS` / `GENERATE_GREETING` / `SAVE_JOB`。判定“本扩展页面”只能比对 `sender.origin` / `sender.url` 是否 `chrome-extension://<own id>`，**不要用 `sender.tab`**——选项页也是在标签页里打开的，`sender.tab` 同样有值，用它判断会把选项页一起挡死。**新增消息类型默认不进白名单**；页面确实需要配置时用 `getUiConfig()` 那样的脱敏视图，不要放开 `GET_CONFIG`（会把 API Key 送进页面上下文）或 `GET_PROFILE`（简历全文）。
+- **存储**：全部走 `chrome.storage.local`，key 为 `offerclaw_profile` / `offerclaw_config` / `offerclaw_jobs` / `offerclaw_resume_summary`，读写封装在 `src/background/storage.js`，不要绕过它直接操作 storage。`getConfig()` 含 apiKey，只能在 background 与扩展页用；content script 走 `getUiConfig()`（只返回 `enabledSites`/`maxScanConcurrency`/`scanTopN`/`hasApiKey`——最后一个只是布尔，面板靠它显示未配置横幅），加字段时想清楚它能不能进页面。面板自己的折叠/拖动位置存页面 `localStorage`（key `offerclaw_panel_state`，只放非敏感的位置与开关）。
+- **LLM 协议分发**：`src/background/llm.js` 按 `config.protocol`（`"openai"` 默认 / `"anthropic"`）走不同请求格式——Anthropic 用 `/v1/messages`+`x-api-key`+`anthropic-version:2023-06-01`+`anthropic-dangerous-direct-browser-access:true`，system 提到顶层、`max_tokens:4096` 必填、不发 `response_format`、解析 `content[0].text`。服务商预设（Base URL/模型/协议）集中在 `src/options/options.js` 的 `PROVIDERS` 表；选项页 provider 下拉切换时按预设覆盖 baseUrl/model，**空预设（mimo/custom 没有公认端点）要清空而不是保留**——保留会让用户以为切换成功，实际把新 Key 发到上一家的端点。改预设记得同步这里与 README。`enable_thinking:false` 仅对硅基流动生效。
+- **vendor 与简历解析**：`src/vendor/pdfjs/` 是本地打包的 pdf.js（MV3 禁止远程代码，不可改用 CDN）；解析 PDF 必须传 `cMapUrl` 指向其 `cmaps/` 目录，否则中文 CID 字体提取会乱码/缺字。选项页简历文件解析在 `src/options/parse-resume.js`（.docx 用原生 ZIP 解析 + `DecompressionStream("deflate-raw")`，无第三方依赖；旧版 .doc 不支持，提示用户另存）。
+- **SPA 路由检测**（`src/content/content.js`）：只监听 `popstate` + 每秒轮询 `location.href`。**不要改回 `history.pushState` 打补丁**——content script 在隔离世界，两边各有一份 history 包装对象，页面自己调 pushState 不会触发补丁；也**不要用全文档 MutationObserver**，招聘站 DOM 持续变动会把回调打满，debounce 反而可能永远等不到静默。SPA 内容可能晚于 `document_idle` 渲染，因此未识别到岗位时最多重试 5 次，每次 1 秒；识别成功或达到上限后停止，不要改成无限轮询。
+- **提取器**（`src/content/extractors.js`）：站点配置集中在 `SITES` 表——每个站点一条：`domain` 正则、详情页选择器（title/company/description）、`cards` 列表选择器、`deepScan` 深度抓取策略（`"fetch"` 抓同源详情页 / `"click"` 点卡片读同页详情面板 / `""` 不深度抓取）、可选的 `cardLink`/`cardUrl`/`cardCompany`/`companyFrom`/`cardExtra` 钩子。**加一个站 = SITES 表加一条 + manifest 的 matches + 选项页 checkbox**，能读到完整 JD 的还要进 `prompts.js` 的 `FULL_JD_SITES`。`panel.js` 的 `scan()` 通过 `api.deepScanStrategy()` 分流，不要再按 site 写 if。输出统一的 Job 结构（字段定义见 DESIGN.md §3）。`"fetch"` 策略的 `api.fetchJobDetail` 带 `credentials:"include"`，而卡片里岗位链接的兜底选择器是 `a[href]`（可能命中广告/外站），所以**必须保留同源校验**，只对 `location.origin` 相同的 URL 发请求。`"click"` 策略（zhipin）逐个 `card.click()` + 轮询 `api.readOpenJd()`（class 选择器优先，兜底用「职位描述」标题锚定相邻正文）取完整 JD；面板初始已停在某张卡片上，所以循环前先点最后一张挪开，保证每次点击都能靠“JD 变化”确认读到的是当前卡片。智联 / 牛客使用 `deepScan:"fetch"`：批量扫描会按同源详情 URL 抓完整 JD，仍必须保留同源校验与失败回退。应届生保持 `deepScan:""`：只按当前页卡片摘要扫描，详情页用 `.detail-title-left-top .job` / `.detail-content-compnav-center` / `.jobinfo`，可能遇到滑动验证——不要绕过。51job（`deepScan:""`）**不要加深度抓取**：其详情页由阿里云 WAF 保护，`curl`/`fetch` 只会拿到 JS 验证挑战页，程序化导航则弹滑动验证，批量抓取既拿不到数据也属于绕过反爬；其卡片内没有岗位 `<a>`（只有公司链接），URL 由 `[sensorsdata]` 属性里的 `jobId` 拼 `https://jobs.51job.com/all/<jobId>.html`——已在真实登录浏览器里验证该地址能正确打开对应岗位。因此 51job 详情页选择器只能在真实浏览器里人工核对（面板显示的岗位名/公司/描述是否正确），`largest()` 兜底保证类名失配时仍能取到 JD。`generic` 分支（企业官网/任意页）优先解析 JSON-LD 的 `JobPosting` 结构化数据，选择器组做 ATS 风格兜底；manifest 只静态注入 SITES 表内站点，generic 由 popup 的「在本页启用」经 `chrome.scripting.executeScript` 注入（activeTab 按次授权）。
+- **公司/城市不要用裸选择器取第一个命中**：用 `firstValid(selectors, valid)`，它会跳过不合格的元素继续往下找。`isCompanyName` 挡站点品牌名和超长文本，`isCityName` 限 16 字（挡掉"北京朝阳区光华路SOHO2C座11楼8号 点击查看地图"这种整段地址）。
+- **BOSS 直聘的三条实测坑**（都在真实登录浏览器里验证过，不要"优化"回去）：
+  - **公司名必须从 `document.title` 取**：`zhipinCompany()` 用 `/」_(.+?)招聘-BOSS直聘/` 匹配。详情页的 `.company-name` 会命中侧栏轮播的「推荐公司」，同一个 URL 每次刷新拿到的公司都不一样（实测依次是 地平线 / 摩尔线程 / 阿里云），这比留空更糟——看着可信但是错的。
+  - **列表卡片的薪资取不到**：BOSS 把数字放在 CSS 生成内容里，DOM 文本节点只剩 `-K·薪`、`-元/天`。所以 `salaryLeaf` 只在卡片内找、找不到就留空（面板显示"薪资待确认"）。**不要再加祖先遍历**——列表页很多卡片写着「面议」，往上爬就会把隔壁卡片的值当成本卡片的。
+  - **解析不出岗位 URL 的"卡片"不是岗位**：`li` 启发式会把技能标签之类的容器也算进来，之前用 `location.href` 兜底，结果排名列表里混进「发表算法相关优秀论文」这种条目，而且这类条目共用同一个 url、`saveJob` 按 url 去重时会互相覆盖。现在 `!cardUrl` 直接 `continue`。
+- **提取不到岗位时要整体留空**：`extractJob()` 用 `identified`（能否拿到标题）决定是否填 company/location/salary/description。列表页、首页上标题拿不到，此时城市选择器会命中筛选控件的「请选择城市」、描述会退化成站点的 meta description——看着像抓到了，其实全是噪音。注意 51job 的标题选择器**不能用裸 `h1` 兜底**：搜索列表页的 h1 是「APP下载」之类的站点栏目名，命中后 identified 变 true，会把列表页第一张卡片的公司/JD 拼成一个假岗位。`panel.js` 的 `score()` 也据此拦掉空 description 的打分请求，省一次无用的 LLM 调用；`updatePanelJob` 对"未识别到岗位"切静默胶囊（视觉上只留标题栏，但 body 必须经 `renderEmpty()` 渲染好提示 + [扫描本页岗位] 入口——胶囊只是收起，用户展开后不能是空白），别改回整面板渲染、也别让胶囊展开后没内容。
+- **面板生命周期**：关闭按钮是会话级的（SPA 内换页不再出现，刷新恢复，别改成永久隐藏——用户会找不到唤回入口）；折叠与拖动位置存页面 localStorage（key `offerclaw_panel_state`，只放非敏感数值）。静默胶囊上的 − 按钮是**直接展开**（`oc-silent` 且未折叠时不走 `oc-collapsed` 切换——胶囊的 body 已被 CSS 隐藏，再切 collapsed 会让用户连点两次才展开，第一次看似没反应）；展开路径里有"body 为空就按当前岗位重渲染"的兜底，空白面板不允许出现。错误横幅按 401/429/未配置分流，401/429 优先判断。
+
+## 约定与注意事项
+
+- 代码、注释、UI 文案和错误消息均为中文，保持一致。
+- LLM 结果解析：优先 `response_format={type:"json_object"}`，兜底正则抠出首个 `{...}`（见 `scoring.js` 的 `parseJson`），结果必须经 `normalizeResult` 校验。
+- **提示词分工**（`src/background/prompts.js`）：单岗位打分用简历全文 + 评分锚点 + `advice`；批量打分用简历摘要、去掉 `reasons/advice`、并说明"信息可能只是摘要，不要因信息缺失扣分"。**领域侧写按画像 `domain` 选择**（`DOMAIN_PROFILES`，默认 `generic`）：AI/软件沿用原有维度清单，其他领域各有自己的能力维度/资历口径/硬门槛，加领域要同步 `options.html` 下拉与 `storage.js` 的 DEFAULT_PROFILE。批量 JD 限长按站点区分——`FULL_JD_SITES`（zhipin/shixiseng，扫描时能读到完整 JD）放到 2200 字，其余（51job 只有卡片摘要）800 字；改动扫描能力时要同步这个集合。评分锚点 `SCORE_ANCHORS` 由单岗位与批量共用，措辞必须领域无关（"关键能力/核心方法"、"同一个职能大类"），不要写成只面向某个行业；转行/国企求职有 `JOB_TYPE_NOTES` 专门提示。简历摘要提示必须保留证书资质、量化业绩、作品集、语言能力槽位——批量扫描唯一的简历输入就是这份摘要，压缩阶段丢掉的字段之后找不回来。`jobType` 有七个枚举值，加值要同步 `options.html` 下拉与 `JOB_TYPE_LABELS`。打招呼语对 `site==="linkedin"` 默认英文、其余中文，用户 hint 可覆盖语言。
+- **简历摘要缓存**：`scoring.js` 的 `batchResumeText` 对超过 1200 字的简历先调 LLM 生成摘要，按简历内容哈希缓存在 `offerclaw_resume_summary`（独立 key，因为选项页保存画像会覆盖 profile 里的额外字段）；生成失败降级为截断全文且不写缓存，不阻断扫描。
+- LLM 默认配置：硅基流动（`https://api.siliconflow.cn/v1`）+ OpenAI 兼容接口，客户端在 `src/background/llm.js`。
+- **安全红线**（DESIGN.md §7、§8；改动前后都要过一遍）：
+  - API Key 与简历全文绝不进页面上下文、DOM 或日志。回传给界面的错误串也算 DOM——`llm.js` 的 `redactKey()` 会先抹掉密钥本身和形似密钥的串，不要绕过它直接把响应体拼进 error。
+  - Base URL 只允许 `https`，`localhost`/`127.0.0.1` 才放行 `http`（见 `options.js` 的 `ensureOriginPermission`），否则 Key 会明文外发。manifest 的 `optional_host_permissions` 也照这个范围收窄。
+  - `manifest.json` 的 `permissions` 是 `storage` + `activeTab` + `scripting`（后两个用于 popup「在本页启用」的按次注入，非招聘站不点不碰）；再动权限前先确认代码真的调了对应 API。
+  - 页面 DOM 里读来的 URL 写进 `href` 前必须过 `OfferClaw.safeUrl()`（只放行 http/https，挡掉 `javascript:` 等伪协议）；渲染文本仍用各文件本地的 `esc()`。
+  - 不做任何自动投递/自动填表/群发，投递动作只能由用户手动触发。
+  - JD 是不可信输入（可能夹带提示词注入），只影响评分质量，不能让它决定控制流。
+  - 仓库要开源：不要把真实简历、真实姓名、本机路径、代理地址写进代码或测试；`CODELY.md`、`.zcode/`、`.codely-cli/` 已在 `.gitignore` 里。
+- Job 以 `url` 去重；`applied`/`rejected` 为终态，`saveJob` 不会覆盖终态记录。
+- 项目运行在 Windows 环境，路径含中文，shell 命令注意加引号。

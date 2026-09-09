@@ -1,0 +1,50 @@
+name: 站点适配请求
+description: 希望支持某个招聘网站，或某个已支持站点改版后选择器失效
+labels: [site-adapter]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        加一个站点主要是补选择器，改动集中在 `src/content/extractors.js`，具体步骤见 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
+        欢迎直接提 PR。
+
+        两条不做的情况，提之前请先确认不属于：需要绕验证码/滑块才能拿到数据；需要登录态之外的伪造请求才能访问。
+  - type: input
+    id: site
+    attributes:
+      label: 站点名称与域名
+      placeholder: "猎聘 liepin.com"
+    validations:
+      required: true
+  - type: input
+    id: detail-url
+    attributes:
+      label: 一个岗位详情页 URL
+      description: 不要用带你个人参数的链接
+    validations:
+      required: true
+  - type: input
+    id: list-url
+    attributes:
+      label: 一个岗位列表页 / 搜索结果页 URL
+  - type: dropdown
+    id: login
+    attributes:
+      label: 不登录能不能看到岗位内容
+      options: [能，游客可见完整 JD, 列表能看、详情要登录, 都需要登录, 不确定]
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 已知情况
+      description: |
+        比如：详情页是服务端渲染还是 SPA；列表页点卡片是跳转还是在同页刷新右侧面板；有没有遇到过滑动验证。
+        如果你已经找到了岗位名/公司/JD 的 CSS 选择器，直接写在这里最有帮助。
+  - type: checkboxes
+    id: existing
+    attributes:
+      label: 类型
+      options:
+        - label: 这是一个新站点
+        - label: 已支持的站点改版了，现在抓不到内容

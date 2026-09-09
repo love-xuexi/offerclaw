@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>OfferClaw 看板</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>OfferClaw</h1>
+        <div id="stats"></div>
+      </header>
+      <div class="toolbar">
+        <select id="filter">
+          <option value="">全部状态</option>
+          <option value="saved">已保存</option>
+          <option value="applied">已投递</option>
+          <option value="rejected">已拒绝</option>
+          <option value="scored">已评分</option>
+        </select>
+        <select id="sort">
+          <option value="updated">按时间</option>
+          <option value="score">按分数</option>
+        </select>
+        <button id="export">导出 CSV</button>
+        <button id="options">打开选项页</button>
+      </div>
+      <input id="search" placeholder="搜索岗位 / 公司">
+      <button id="runHere">在本页启用 OfferClaw</button>
+      <div id="runHereNote">在四个已适配站点之外的页面（如企业官网、Greenhouse / Lever）注入一次面板</div>
+      <input id="hint" placeholder="给打招呼语加要求：如 幽默一点 / 我经历不太匹配请生成合适的招呼">
+      <div id="list"></div>
+    </main>
+    <script src="../common/util.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>OfferClaw 选项</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main>
+      <h1>OfferClaw 选项</h1>
+      <form id="form">
+        <section>
+          <h2>个人画像</h2>
+          <label>目标领域
+          <select name="domain">
+            <option value="ai">AI / 软件 / 互联网</option>
+            <option value="product">产品 / 运营 / 市场</option>
+            <option value="finance">金融 / 财会 / 法务</option>
+            <option value="design">设计 / 创意</option>
+            <option value="medical">医疗 / 护理 / 生物</option>
+            <option value="sales">销售 / 商务 / 客户成功</option>
+            <option value="manufacturing">制造 / 工程 / 供应链</option>
+            <option value="education">教育 / 培训 / 科研</option>
+            <option value="hr">人力资源 / 行政 / 通用职能</option>
+            <option value="generic">通用（不指定领域）</option>
+          </select>
+          <small id="domainHint">影响打分维度：评分提示词会按所选领域评估匹配度</small></label>
+          <label>简历文本
+          <textarea name="resumeText" placeholder="粘贴简历全文，或用下方「导入简历文件」上传 PDF / Word 自动解析填充…"></textarea></label>
+          <label>导入简历文件<input type="file" id="resumeFile" accept=".pdf,.docx"><small id="resumeFileHint">支持 PDF / Word（.docx），解析后填入上方文本框，可修改后再保存</small></label>
+          <label>目标岗位<input name="targetRoles" placeholder="例如：产品经理，用户运营，项目管理（多个用逗号分隔）"></label>
+          <label>技能与专长<input name="skills" placeholder="例如：SQL，Python，Figma，CPA 已过 3 科（按你的行业填写）"></label>
+          <label>教育背景<input name="education" placeholder="例如：XX大学 会计学 本科 2027 届 / 硕士在读"></label>
+          <label>证书资质<input name="certificates" placeholder="例如：教师资格证，CPA，法律职业资格，执业医师（没有可不填）"></label>
+          <label>期望城市<input name="preferredCities" placeholder="例如：上海，杭州，苏州（多个用逗号分隔）"></label>
+          <label>期望薪资下限<input name="expectedSalary" placeholder="例如：6000/月，150元/天（可不填）"></label>
+          <label>求职类型
+          <select name="jobType">
+            <option value="intern">日常实习</option>
+            <option value="summer">暑期实习</option>
+            <option value="campus">校招（应届）</option>
+            <option value="social">社招（有经验）</option>
+            <option value="parttime">兼职</option>
+            <option value="career">转行求职</option>
+            <option value="soe">国企 / 事业单位</option>
+          </select></label>
+          <label>补充说明
+          <textarea name="extraNotes" placeholder="例如：可实习 6 个月以上，每周到岗 4 天；接受出差；优先国企"></textarea></label>
+        </section>
+        <section>
+          <h2>LLM 配置</h2>
+          <label>服务商
+          <select name="provider">
+            <option value="siliconflow">硅基流动（默认）</option>
+            <option value="zhipu">智谱 GLM（Coding Plan）</option>
+            <option value="bailian">阿里云百炼</option>
+            <option value="qwen">通义千问</option>
+            <option value="minimax">MiniMax</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="mimo">小米 MiMo</option>
+            <option value="openai">OpenAI（ChatGPT）</option>
+            <option value="anthropic">Anthropic（Claude）</option>
+            <option value="custom">自定义（OpenAI 兼容）</option>
+          </select></label>
+          <label>Base URL<input name="baseUrl" placeholder="例如：https://api.siliconflow.cn/v1"></label>
+          <label>API Key<input type="password" name="apiKey" placeholder="sk-…（仅保存在本机浏览器，不会上传）"></label>
+          <label>模型<input name="model" placeholder="例如：deepseek-ai/DeepSeek-V4-Flash"></label>
+          <label>温度<input type="number" name="temperature" min="0" max="2" step=".1" placeholder="0.3（0 精确，2 更发散）"></label>
+          <label>扫描并发<input type="number" name="maxScanConcurrency" min="1" max="10" placeholder="5（1-10，同时打分的岗位数）"></label>
+          <label>扫描上限<input type="number" name="scanTopN" min="1" max="100" placeholder="20（每次最多扫描的岗位数）"></label>
+        </section>
+        <section>
+          <h2>支持站点</h2>
+          <label><input type="checkbox" name="zhipin"> BOSS 直聘</label>
+          <label><input type="checkbox" name="shixiseng"> 实习僧</label>
+          <label><input type="checkbox" name="job51"> 51job（前程无忧）</label>
+          <label><input type="checkbox" name="zhaopin"> 智联招聘</label>
+          <label><input type="checkbox" name="nowcoder"> 牛客网</label>
+          <label><input type="checkbox" name="yingjiesheng"> 应届生求职网</label>
+          <label><input type="checkbox" name="linkedin"> LinkedIn</label>
+          <label><input type="checkbox" name="greenhouse"> Greenhouse（海外企业招聘页）</label>
+          <label><input type="checkbox" name="lever"> Lever（海外企业招聘页）</label>
+          <small>其他任意网站（企业官网等）可在看板里点「在本页启用」按需注入。</small>
+        </section>
+        <button class="primary" type="submit">保存</button>
+        <button type="button" id="test">测试连接</button>
+        <span id="message"></span>
+      </form>
+    </main>
+    <script src="parse-resume.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

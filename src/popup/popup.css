@@ -1,0 +1,132 @@
+body {
+  width: 560px;
+  margin: 0;
+  background: #f8fafc;
+  color: #1f2937;
+  font: 13px Arial, sans-serif
+}
+
+main {
+  padding: 16px
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between
+}
+
+h1 {
+  color: #4f46e5;
+  font-size: 20px
+}
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0
+}
+
+button,
+select,
+input,
+textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 7px;
+  background: #fff;
+  cursor: pointer
+}
+
+#hint,
+#search {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 8px
+}
+
+#hint {
+  margin-bottom: 10px
+}
+
+#runHere {
+  width: 100%;
+  background: #eef2ff;
+  color: #3730a3
+}
+
+#runHereNote {
+  color: #9ca3af;
+  font-size: 11px;
+  margin: 4px 0 10px
+}
+
+.job {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin: 8px 0;
+  padding: 10px
+}
+
+.job-title {
+  display: block;
+  color: #1f2937;
+  font-weight: bold;
+  text-decoration: none;
+  margin-bottom: 5px
+}
+
+.job-title:hover {
+  color: #4f46e5
+}
+
+.muted {
+  color: #6b7280
+}
+
+.score {
+  font-weight: bold;
+  color: #4f46e5;
+  float: right
+}
+
+.job-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px
+}
+
+.job-actions a {
+  color: #4f46e5
+}
+
+.applied-at {
+  color: #16a34a
+}
+
+.inline-greeting {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px
+}
+
+.inline-greeting textarea {
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 64px;
+  resize: vertical;
+  cursor: text
+}
+
+.error {
+  color: #dc2626
+}
+
+.empty {
+  text-align: center;
+  color: #6b7280;
+  padding: 36px
+}

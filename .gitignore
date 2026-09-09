@@ -1,0 +1,28 @@
+node_modules/
+dist/
+
+# 本机 / AI 工具产生的文件，不进开源仓库（可能含本地路径、代理地址等环境信息）
+CODELY.md
+.codely-cli/
+.zcode/
+.claude/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# 截图原片（含浏览器边框与未脱敏内容），只留处理后的成图
+docs/images/_*
+
+# 本地 AI 工作记录，不进入开源仓库
+task_plan.md
+findings.md
+progress.md
+
+# 内部分析 / 规划文档，不进入公开仓库
+CODE_WIKI.md
+PROJECT_EXPLORATION.md
+docs/superpowers/

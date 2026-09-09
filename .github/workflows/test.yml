@@ -1,0 +1,26 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # 全部脚本都 mock 掉 chrome.* 与 fetch，不需要 API Key、不联网
+      - run: node scripts/test-sites.mjs
+      - run: node scripts/test-messaging.mjs
+      - run: node scripts/test-prompts.mjs
+      - run: node scripts/test-scoring.mjs
+      - run: node scripts/test-llm.mjs
+      - run: node scripts/test-util.mjs
+      # 没提供 PDF 时会跳过 PDF 那一项，仍然验证 .docx 与错误路径
+      - run: node scripts/test-resume-parse.mjs
+      # 打包能跑通，顺带保证 manifest.json 是合法 JSON
+      - run: node scripts/pack.mjs
