@@ -55,6 +55,9 @@ Popup 里管理已保存的岗位：状态流转（已评分 / 已保存 / 已�
 | 智联招聘 `zhaopin.com` | ✅ | ✅ 完整 JD | 扫描时按埋点 `jdno` 抓同源详情页补全 JD |
 | 牛客网 `nowcoder.com` | ✅ | ✅ 完整 JD | 扫描时抓同源详情页，读取 `.job-detail-word` / `.job-detail-infos` |
 | 应届生求职网 `yingjiesheng.com` | ✅ | ⚠️ 卡片摘要 | 搜索页按 `jobdetail` 链接提取；详情页可能遇到滑动验证，通过后可匹配，不绕过 |
+| 北森 ATS `xxx.zhiye.com` | ✅ | ✅ 完整 JD | 企业校招官网（科大讯飞、合合信息等）；卡片没有链接，扫描时用站点自己的列表接口按标题合并完整 JD |
+| Moka ATS `app.mokahr.com` | ✅ | ✅ 完整 JD | 企业校招官网（千里科技、飞步科技等）；新版模板卡片自带全文，经典模板自动逐岗打开详情页读取后返回 |
+| 飞书招聘 `xxx.jobs.feishu.cn` | ✅ | ✅ 完整 JD | 企业招聘官网（蔚来、影石等）；详情页纯前端渲染，扫描时抓同源岗位接口补全 JD |
 | LinkedIn `linkedin.com` | ✅ | ⚠️ 卡片摘要 | 薪资识别中英文单位，打招呼语默认英文 |
 | Greenhouse `greenhouse.io` | ✅ | ✅ | 海外企业招聘页，读 JobPosting 结构化数据 |
 | Lever `lever.co` | ✅ | ✅ | 同上 |

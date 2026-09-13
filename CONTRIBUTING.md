@@ -32,7 +32,7 @@ node scripts/test-resume-parse.mjs [简历.pdf]
 
 这是最欢迎的贡献类型。v0.2 起站点配置集中在 `src/content/extractors.js` 的 `SITES` 表，加站基本是加一条数据：
 
-1. `SITES` 表加一个条目：`domain`（域名正则）、`title`/`company`/`description`（详情页选择器数组，`first()` 按顺序取第一个有文字的，`largest()` 是类名失配兜底）、`cards`（列表卡片选择器）、`deepScan`（深度抓取策略：`"fetch"` 抓同源详情页 / `"click"` 点卡片读同页详情面板 / `""` 不深度抓取）。可选钩子：`cardLink`（卡片里岗位链接的选择器）、`cardUrl(el)`（从埋点等属性拼岗位 URL 的函数）、`cardCompany`（列表卡片内精确公司名选择器）、`companyFrom()`（特殊的公司名来源，如 BOSS 从 `document.title` 取）、`cardExtra`（额外卡片启发式）。
+1. `SITES` 表加一个条目：`domain`（域名正则）、`title`/`company`/`description`（详情页选择器数组，`first()` 按顺序取第一个有文字的，`largest()` 是类名失配兜底）、`cards`（列表卡片选择器）、`deepScan`（深度抓取策略：`"fetch"` 抓同源详情页 / `"click"` 点卡片读同页详情面板 / `"navigate"` 同页 hash 路由跳详情读完再返回 / `""` 不深度抓取）。可选钩子：`cardLink`（卡片里岗位链接的选择器）、`cardUrl(el)`（从埋点等属性拼岗位 URL 的函数；卡片本身是 `<a>` 的站点写 `(el) => el.href`——`querySelector` 匹配不到自身）、`cardTitle`/`cardDescription`（列表卡片内精确的标题/JD 选择器）、`cardCompany`（列表卡片内精确公司名选择器）、`companyFrom()`（特殊的公司名来源，如 BOSS 从 `document.title` 取）、`cardExtra`（额外卡片启发式）、`listJobs()`（扫描前拉站点同源列表接口、按卡片标题合并 URL 与完整 JD，北森用）、`fetchDetail(url)`（单岗位同源 JSON 补全，飞书用）、`descriptionFrom()`（详情页 JD 的精确拼取函数）、`openJdSelectors`（"click"/"navigate" 读详情面板的选择器）。
 2. `src/background/prompts.js` 的 `FULL_JD_SITES`：只有扫描时能读到完整 JD 的站点才加进去（决定批量打分的 JD 限长）。
 3. `manifest.json` 的 `host_permissions` 与 `content_scripts.matches`。
 4. `src/options/options.html` 与 `options.js` 的站点开关 checkbox。

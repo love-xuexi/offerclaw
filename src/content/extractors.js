@@ -65,6 +65,18 @@
   const isCompanyName = (text) => text.length <= 40 && !SITE_BRANDS.test(text);
   // 城市名很短；"北京朝阳区光华路SOHO2C座11楼8号 点击查看地图" 这种整段地址不是我们要的
   const isCityName = (text) => text.length <= 16;
+  // ATS 官网的公司名大多只写在 title / meta keywords 里（"XX公司校园招聘"、"职位 - XX校招"）。
+  // 北森部分租户（如合合信息）整页没有公司名，这时宁可留空——BOSS 直聘的教训：错的公司名比空着更糟。
+  const companyNameFromMeta = () => {
+    const sources = [document.querySelector("meta[name='keywords']")?.content || "", document.title];
+    for (const source of sources) {
+      for (const part of String(source).split(/[,，|]| - /)) {
+        const name = part.replace(/(校园|社会)?招聘$|校招$|热招$/, "").trim();
+        if (name.length >= 2 && !/招聘|校招|官网|职位/.test(name) && !/^(校园|社会|秋招|春招|官网|首页|加入)$/.test(name)) return name;
+      }
+    }
+    return "";
+  };
   const largest = () => [...document.querySelectorAll("main, article, section, .content, .description, [class*='detail'], [class*='description']")]
     .map((el) => ({ el, raw: rawText(el), clean: cleanText(el) }))
     .filter(({ el, raw, clean }) => el.offsetParent !== null && clean.length >= 40 && cssBraceRatio(raw) <= 0.6)
@@ -103,8 +115,12 @@
   // 加一个站 = 在这里加一个条目 + manifest 的 matches + options 页的 checkbox + prompts.js 的 FULL_JD_SITES。
   // 每个条目：domain 正则；详情页选择器（title/company/description）；
   //   cards 列表卡片选择器；deepScan 取完整 JD 的策略——
-  //   "fetch"（抓同源详情页，配 detailDoc 把 fetch 来的文档解析回 Job 字段）、
-  //   "click"（点卡片读同页详情面板，配 openJd()）、""（卡片摘要就是全部，不做深度抓取）。
+  //   "fetch"（并发抓同源详情页补全；站点配了 fetchDetail 钩子时改抓同源 JSON API）、
+  //   "click"（点卡片读同页详情面板，配 readOpenJd）、
+  //   "navigate"（卡片没 JD 且详情是同页 hash 路由：逐岗跳详情读完再返回，配 openJdSelectors）、
+  //   ""（卡片摘要就是全部，不做深度抓取）。
+  //   可选钩子：cardTitle/cardDescription（列表卡片内的标题/JD 选择器）、
+  //   listJobs（扫描前拉一次站点同源列表接口，按卡片标题精确合并 URL 与完整 JD，北森用）。
   const SITES = {
     zhipin: {
       domain: /zhipin\.com/,
@@ -212,6 +228,113 @@
       cards: [".posting", "li"],
       deepScan: ""
     },
+    // 北森 / Moka / 飞书招聘是企业校招官网最常用的三家 ATS。详情页都是纯客户端渲染
+    // （fetch 详情 HTML 是空壳，拿不到 JD），完整 JD 分别走列表 API 合并、同页 hash 跳转、同源 JSON API。
+    zhiye: {
+      domain: /zhiye\.com/,
+      // 详情标题在职位 banner 的 STJobName 容器里；不能用 STJobTitle——列表卡片同款类名，
+      // 命中后列表页第一张卡会被拼成假岗位（51job 裸 h1 同款坑）
+      title: ["[class*='STJobName']", "h1"],
+      // 部分租户页面（如合合信息）上没有公司名，靠 title/meta 抠，抠不到留空
+      company: [],
+      description: ["[class*='STJobDuty']", "[class*='STDutyContainer']", ".pc-job-detail", "[class*='description']"],
+      cards: ["[class*='STListItem']"],
+      cardTitle: "[class*='STJobTitle']",
+      // 卡片里没有岗位链接也没有 JD。批量扫描用站点自己的列表接口（页面渲染列表用的同一个，
+      // 同源 + 用户会话）：一次分页拉全岗位的完整 JD（Duty+Require），按"卡片标题 === JobAdName"
+      // 精确合并，无需逐岗深扫。PageSize=1000 实测服务端照单全收（讯飞 893 岗一次拉全），封顶 2 页
+      listJobs: async () => {
+        const out = [];
+        for (let page = 0; page < 2; page++) {
+          const res = await fetch(`${location.origin}/api/Jobad/GetJobAdPageList`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ PageIndex: page, PageSize: 1000, DisplayFields: ["Category", "Kind", "LocId", "PostDate", "ClassificationOne"] })
+          });
+          if (!res.ok) break;
+          const json = await res.json().catch(() => null);
+          const rows = json?.Data;
+          if (!Array.isArray(rows) || !rows.length) break;
+          for (const row of rows) {
+            const description = [row.Duty, row.Require].map((s) => String(s || "").trim()).filter(Boolean).join("\n\n");
+            if (!row.JobAdName || !row.Id || !description) continue;
+            out.push({
+              title: String(row.JobAdName),
+              url: new URL(`/campus/detail?jobAdId=${row.Id}`, location.origin).href,
+              description: stripCssNoise(description),
+              location: Array.isArray(row.LocNames) ? row.LocNames.filter(Boolean).join("、") : "",
+              salary: salaryFromText(String(row.Salary || ""))
+            });
+          }
+          if (rows.length < 1000 || (json.Count && out.length >= json.Count)) break;
+        }
+        return out;
+      },
+      deepScan: "",
+      companyFrom: companyNameFromMeta
+    },
+    moka: {
+      domain: /mokahr\.com/,
+      // 两套列表模板：新版（/campus_apply/）卡片 <a> 里自带完整 JD，经典版（/campus-recruitment/）
+      // 只有标题和日期；详情页两套模板同构：.apply__content + job-description-* 正文。
+      // 标题必须限定在 .apply__content 里：列表页左侧筛选栏的"项目/职位性质"等分组标题
+      // 也用 sd-foundation-heading，不限作用域会把筛选页拼成假岗位
+      title: [".apply__content [class*='sd-foundation-heading']"],
+      company: [],
+      description: [".apply__content [class*='job-description-']", "[class*='job-description-']"],
+      // 卡片就是 <a href="#/job/<uuid>"> 本身（同卡可能有内外两个 <a>，url/标题相同会被去重）；
+      // querySelector 匹配不到自身，卡片自己就是链接时要走 cardUrl 取 href
+      cards: ["a[href*='#/job/']"],
+      cardUrl: (el) => el.href,
+      cardTitle: "[class*='title-']",
+      cardDescription: "[class*='job-description-']",
+      // API 响应加密走不了；经典模板卡片没 JD，详情是同页 hash 路由且点开后列表卸载，
+      // 用 navigate 策略逐岗跳详情读 JD 再返回（新版模板卡片已带全文，扫描时直接跳过）
+      deepScan: "navigate",
+      openJdSelectors: ["[class*='job-description-']"],
+      companyFrom: companyNameFromMeta
+    },
+    feishu: {
+      domain: /jobs\.feishu\.cn/,
+      // 详情页正文在稳定类 jobDetail 里，标题是 .job-title；不要把列表卡的 positionItem-title
+      // 放进详情选择器，否则列表页会拼出假岗位
+      title: [".job-title"],
+      company: [],
+      description: [".jobDetail", "[class*='job-description']", "[class*='description']"],
+      // jobDetail 容器整体取会把职位标题和元信息一起带进来，按 block 精确拼"职位描述+职位要求"
+      descriptionFrom: () => [...document.querySelectorAll(".jobDetail [class*='block-content']")]
+        .map((block) => (block.innerText || "").trim())
+        .filter(Boolean)
+        .join("\n\n"),
+      // 卡片就是职位 <a>（整卡可点，标题/预览都在里面）；不要用 [class*='positionItem']
+      // 做卡片——标题/副标题/预览的类名都含这个词，会把卡片内部元素也当成卡片
+      cards: ["a[href*='/position/']"],
+      cardUrl: (el) => el.href,
+      // title-text 是标题正文专属元素；外层 positionItem-title 会把"推荐投递"徽标一起带进标题
+      cardTitle: "[class*='positionItem-title-text']",
+      cardDescription: "[class*='positionItem-jobDesc']",
+      // 详情页纯客户端渲染（fetch HTML 无 JD）；但岗位 JSON API 无需 _signature，
+      // 同源 GET 即可拿到 description + requirement + 城市
+      fetchDetail: async (url) => {
+        const id = String(url).match(/\/position\/(\d+)/)?.[1];
+        if (!id) return null;
+        const res = await fetch(`${location.origin}/api/v1/job/posts/${id}?portal_type=6&with_recommend=false`, { credentials: "include" });
+        if (!res.ok) return null;
+        const json = await res.json().catch(() => null);
+        const post = json?.data?.job_post_detail;
+        if (!post) return null;
+        const description = [post.description, post.requirement].map((s) => String(s || "").trim()).filter(Boolean).join("\n\n");
+        if (!description) return null;
+        return {
+          title: String(post.title || ""),
+          description: stripCssNoise(description),
+          location: (Array.isArray(post.city_list) ? post.city_list : []).map((c) => c?.name).filter(Boolean).join("、")
+        };
+      },
+      deepScan: "fetch",
+      companyFrom: companyNameFromMeta
+    },
     generic: {
       domain: /.*/,
       ...GENERIC_SELECTORS,
@@ -240,8 +363,9 @@
     const titleText = structured?.title || cleanText(titleEl);
     const identified = Boolean(titleText);
     const salary = structured?.salary || salaryFromText(cleanText(first(salarySelectors))) || salaryFromText(cleanText(document.body));
-    // 选中文本只当通用兜底：已适配的站点上任何一次划词（哪怕双击一个词）都不该顶掉站点选择器抓到的 JD
-    const siteDescription = cleanText(descEl) || document.querySelector("meta[name='description']")?.content || "";
+    // 站点配了 descriptionFrom 钩子时用它精确拼 JD（飞书：职位描述/职位要求是两个并列 block，
+    // 容器整体取会把标题和元信息一起带进来）；没有就用选择器 + largest 兜底
+    const siteDescription = config.descriptionFrom?.() || cleanText(descEl) || document.querySelector("meta[name='description']")?.content || "";
     return {
       id: "job-" + Date.now(), site, url: location.href, title: titleText || "未识别到岗位",
       company: identified ? companyName : "",
@@ -272,6 +396,12 @@
     try { target = new URL(job.url, location.href); } catch (_) { return job; }
     if (target.origin !== location.origin) return job;
     try {
+      // 站点配了 fetchDetail 钩子时抓同源 JSON 而不是解析 HTML：飞书详情页是纯客户端渲染，fetch HTML 是空壳
+      if (SITES[job.site]?.fetchDetail) {
+        const d = await SITES[job.site].fetchDetail(target.href);
+        if (!d?.description) return job;
+        return { ...job, title: d.title || job.title, description: d.description, ...(d.location ? { location: d.location } : {}), ...(d.salary ? { salary: d.salary } : {}) };
+      }
       const res = await fetch(target.href, { credentials: "include" });
       if (!res.ok) return job;
       const doc = new DOMParser().parseFromString(await res.text(), "text/html");
@@ -298,15 +428,23 @@
     }
     return "";
   };
-  // 深度扫描（"click" 策略）配套：读同页右侧详情面板的完整 JD
+  // 深度扫描（"click"/"navigate" 策略）配套：读同页详情面板 / 当前详情路由的完整 JD
   api.readOpenJd = () => {
-    if (api.deepScanStrategy(api.detectSite()) !== "click") return "";
-    const byClass = cleanText(first([".job-detail-box .job-sec-text", ".job-sec-text", ".job-detail-section .job-sec-text", ".job-detail .text"]));
+    const strategy = api.deepScanStrategy(api.detectSite());
+    if (strategy !== "click" && strategy !== "navigate") return "";
+    const config = siteConfig();
+    const byClass = cleanText(first([...(config.openJdSelectors || []), ".job-detail-box .job-sec-text", ".job-sec-text", ".job-detail-section .job-sec-text", ".job-detail .text"]));
     return stripCssNoise(byClass.length >= 60 ? byClass : textNearHeading("职位描述"));
   };
-  api.extractJobList = () => {
+  api.extractJobList = async () => {
     const site = api.detectSite();
     const config = siteConfig();
+    // 北森这类站点卡片里既没有岗位链接也没有 JD：先拉一次站点自己的列表接口，
+    // 按"卡片标题 === 接口 JobAdName"精确合并出 URL 与完整 JD；接口失败则该站扫描降级，不猜 URL
+    let listByTitle = null;
+    if (config.listJobs) {
+      try { listByTitle = new Map((await config.listJobs()).map((item) => [item.title, item])); } catch (_) { listByTitle = new Map(); }
+    }
     const cards = [...new Set(config.cards.flatMap((selector) => [...document.querySelectorAll(selector)]))];
     const cardSet = new Set(cards);
     // BOSS 的 li 启发式：选择器没覆盖到、但内部含岗位名容器的 li 也是卡片
@@ -316,20 +454,35 @@
     for (const el of cards) {
       const link = config.cardLink ? el.querySelector(config.cardLink) : el.querySelector("a[href]");
       const cardText = cleanText(el);
-      const cardUrl = config.cardUrl ? config.cardUrl(el) : link ? new URL(link.href, location.href).href : "";
+      const titleEl = first([config.cardTitle, config.cardLink, ".jname", ".title", ".job-name", ".job-title", "[class*='job-name']", "[class*='job-title']", "h3", "h2"].filter(Boolean), el);
+      const title = cleanText(titleEl) || cardText.slice(0, 100);
+      const supplementary = listByTitle?.get(title);
+      const cardUrl = config.cardUrl ? config.cardUrl(el) : link ? new URL(link.href, location.href).href : supplementary?.url || "";
       // 没解析出岗位链接的"卡片"不是岗位：BOSS 的 li 启发式会把技能标签之类的容器也算进来，
       // 之前用 location.href 兜底，结果排名列表里混进「发表算法相关优秀论文」这种条目，
       // 而且这类条目共用同一个 url，saveJob 按 url 去重时会互相覆盖。
       if (!cardUrl || cardText.length < 10) continue;
-      const titleEl = first([config.cardLink, ".jname", ".title", ".job-name", ".job-title", "[class*='job-name']", "[class*='job-title']", "h3", "h2"].filter(Boolean), el);
       const companyEl = config.cardCompany
         ? first([config.cardCompany], el) || first(companySelectors, el)
         : first(companySelectors, el);
       // 薪资只在卡片自身里找：原来会往上爬 8 层祖先，BOSS 列表页很多卡片写着"面议"，
       // 一爬就把隔壁卡片的薪资当成本卡片的。BOSS 还把薪资数字放在 CSS 生成内容里（文本节点只剩 "-K·薪"），
       // 取不到就留空，面板会显示"薪资待确认"——比显示一个错的数字诚实。
-      result.push({ id: "job-" + Math.random().toString(36).slice(2), site, url: cardUrl, title: cleanText(titleEl) || cardText.slice(0, 100), company: cleanText(companyEl), location: cleanText(firstValid([".location", ".area", "[class*='city']"], isCityName, el)), salary: salaryLeaf(el), description: cardText, extractedAt: new Date().toISOString(), score: null, verdict: null, matched: [], missing: [], reasons: "", status: "scored", greeting: "", updatedAt: new Date().toISOString(), el });
+      result.push({ id: "job-" + Math.random().toString(36).slice(2), site, url: cardUrl, title, company: cleanText(companyEl) || config.companyFrom?.() || "", location: supplementary?.location || cleanText(firstValid([".location", ".area", "[class*='city']"], isCityName, el)), salary: supplementary?.salary || salaryLeaf(el), description: supplementary?.description || (config.cardDescription ? cleanText(first([config.cardDescription], el)) || cardText : cardText), extractedAt: new Date().toISOString(), score: null, verdict: null, matched: [], missing: [], reasons: "", status: "scored", greeting: "", updatedAt: new Date().toISOString(), el });
     }
-    return result.filter((item, index, all) => all.findIndex((other) => `${other.url}|${other.title}|${other.company}` === `${item.url}|${item.title}|${item.company}`) === index);
+    // 同一岗位 URL 只留一条：Moka 同卡内外两个 <a> 的标题可能差个"急"徽标字，按
+    // url|title|company 三元组去重收不掉；保留 JD 更长的那个（整卡链接的文本更全）。
+    // saveJob 本来就按 url 去重，看板里同一岗位也只该有一行
+    const byUrl = new Map();
+    for (const item of result) {
+      const existing = byUrl.get(item.url);
+      if (!existing || item.description.length > existing.description.length) byUrl.set(item.url, item);
+    }
+    return [...byUrl.values()];
+  };
+  // navigate 深扫跳回列表后，判断卡片是否已经重新渲染出来
+  api.listHasCards = () => {
+    const config = siteConfig();
+    return config.cards.some((selector) => { try { return Boolean(document.querySelector(selector)); } catch (_) { return false; } });
   };
 })(globalThis);

@@ -29,7 +29,10 @@
     "*://*.yingjiesheng.com/*",
     "*://*.linkedin.com/*",
     "*://*.greenhouse.io/*",
-    "*://*.lever.co/*"
+    "*://*.lever.co/*",
+    "*://*.zhiye.com/*",
+    "*://*.mokahr.com/*",
+    "*://*.jobs.feishu.cn/*"
   ],
   "content_scripts": [
     {
@@ -42,7 +45,10 @@
         "*://*.yingjiesheng.com/*",
         "*://*.linkedin.com/*",
         "*://*.greenhouse.io/*",
-        "*://*.lever.co/*"
+        "*://*.lever.co/*",
+        "*://*.zhiye.com/*",
+        "*://*.mokahr.com/*",
+        "*://*.jobs.feishu.cn/*"
       ],
       "js": [
         "src/common/messages.js",

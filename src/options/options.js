@@ -46,6 +46,9 @@ const readForm = () => {
         zhaopin: form.zhaopin.checked,
         nowcoder: form.nowcoder.checked,
         yingjiesheng: form.yingjiesheng.checked,
+        zhiye: form.zhiye.checked,
+        moka: form.moka.checked,
+        feishu: form.feishu.checked,
         linkedin: form.linkedin.checked,
         greenhouse: form.greenhouse.checked,
         lever: form.lever.checked

@@ -6,8 +6,8 @@ const JOB_TYPE_NOTES = {
   career: "候选人属于转行求职：原领域年限不能直接算作目标领域年限，方向与方法上的可迁移性是主要评分依据，不要因年限不足直接判硬门槛不满足。",
   soe: "候选人目标为国企/事业单位：稳定性、政治面貌、证书与编制流程相关的门槛按 JD 原文判断，不要用市场化公司的偏好（如年龄歧视、大厂背景）加分减分。"
 };
-// BOSS/实习僧/牛客/智联扫描时会读到完整 JD，截太短会丢掉“任职要求”（学历/年限/技术栈硬门槛都在那里）；51job、应届生等只有卡片摘要，无需放宽
-const FULL_JD_SITES = new Set(["zhipin", "shixiseng", "nowcoder", "zhaopin"]);
+// BOSS/实习僧/牛客/智联/北森/Moka/飞书扫描时会读到完整 JD，截太短会丢掉“任职要求”（学历/年限/技术栈硬门槛都在那里）；51job、应届生等只有卡片摘要，无需放宽
+const FULL_JD_SITES = new Set(["zhipin", "shixiseng", "nowcoder", "zhaopin", "zhiye", "moka", "feishu"]);
 const clip = (value, limit) => {
   const text = String(value || "");
   return text.length > limit ? text.slice(0, limit - 1) + "…" : text;

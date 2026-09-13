@@ -142,6 +142,26 @@
     }
     return "";
   };
+  // navigate 深扫：跳到岗位详情（仅限同文档 hash 路由，如 Moka），等 JD 渲染出来读一段，再回到列表。
+  // 目标不是 hash 路由或跳转失败时返回空串，回退卡片摘要
+  const navigateForJd = async (job, { listHash, previous }) => {
+    let target;
+    try { target = new URL(job.url, location.href); } catch (_) { return ""; }
+    if (target.origin !== location.origin || !target.hash) return "";
+    location.hash = target.hash;
+    // 等 SPA 真正切到详情路由（列表卸载）再读，过渡期里读到的可能是列表卡片上的文字
+    const navDeadline = Date.now() + 4000;
+    while (Date.now() < navDeadline && location.hash !== target.hash) await new Promise((resolve) => setTimeout(resolve, 100));
+    if (location.hash !== target.hash) return "";
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const jd = await waitForNewJd(previous, 6000);
+    history.back();
+    const backDeadline = Date.now() + 5000;
+    while (Date.now() < backDeadline && (location.hash !== listHash || !api.listHasCards())) await new Promise((resolve) => setTimeout(resolve, 200));
+    // 兜底：路由没回到列表（用户中途点过别的）就强制跳回，别把用户晾在详情页
+    if (location.hash !== listHash && listHash) { try { location.hash = listHash; } catch (_) { /* ignore */ } }
+    return jd;
+  };
   const resetListCacheIfNeeded = () => {
     const key = `${location.pathname}${location.search}`;
     if (key !== listPageKey) { listPageKey = key; scored.clear(); rankedJobs.clear(); }
@@ -162,7 +182,7 @@
   async function scan() {
     resetListCacheIfNeeded();
     const result = panel.querySelector(".oc-result");
-    const candidates = api.extractJobList();
+    const candidates = await api.extractJobList();
     if (!candidates.length) { result.innerHTML = "<p>本页未识别到岗位列表，请在岗位列表页使用，或用“开始匹配”匹配当前岗位。</p>"; return; }
     const configResponse = await send("GET_UI_CONFIG");
     uiConfig = configResponse?.config || {};
@@ -198,6 +218,24 @@
           }
         };
         await Promise.all(Array.from({ length: Math.min(limit, toScore.length) }, fetchWorker));
+      } else if (strategy === "navigate") {
+        // Moka 经典模板：卡片没 JD，详情是同页 hash 路由且点开后列表卸载——逐岗跳详情读完再回列表。
+        // 新版模板卡片已自带完整 JD（≥80 字），直接跳过，页面不动
+        const listHash = location.hash;
+        let lastNavJd = "";
+        for (let i = 0; i < toScore.length; i++) {
+          const job = toScore[i];
+          if ((job.description || "").length >= 80) { fetchedDone++; progress.update(); continue; }
+          const jd = await navigateForJd(job, { listHash, previous: lastNavJd });
+          if (jd) { toScore[i] = { ...job, description: jd }; lastNavJd = jd; }
+          fetchedDone++; progress.update();
+        }
+        // 跳转过程中列表被重渲染过：重新认领卡片元素，匹配角标才能标到可见的卡片上
+        const refreshed = await api.extractJobList();
+        for (const job of toScore) {
+          const match = refreshed.find((item) => jobKey(item) === jobKey(job));
+          if (match) job.el = match.el;
+        }
       } else {
         // 面板初始就停在某张卡片上，先点最后一张让它挪开，这样后续每次点击都能靠“JD 变化”确认读到的是当前卡片
         const openCard = (card) => { if (!card) return false; card.scrollIntoView?.({ block: "center" }); try { card.click(); return true; } catch (_) { return false; } };

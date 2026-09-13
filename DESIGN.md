@@ -23,7 +23,7 @@
 - **Chrome Manifest V3 扩展**，纯原生 JS（无构建步骤），便于本地 `加载已解压的扩展程序` 直接使用、易交付。
 - LLM：经 `llm.js` 按 `protocol` 字段分发，支持 OpenAI 兼容接口（默认硅基流动，另含智谱/百炼/通义/MiniMax/DeepSeek/小米 MiMo/OpenAI 等）与 Anthropic Messages API（独立协议，端点 `/v1/messages`、`x-api-key`+`anthropic-version`、`system` 顶层、`max_tokens` 必填、无 `response_format` 靠提示词+正则兜底）。服务商预设与协议在 `src/options/options.js` 的 `PROVIDERS` 表，改预设要同步改这里。API Key 存 `chrome.storage.local`，仅在 background service worker 中使用（不进页面上下文）。
 - 存储：`chrome.storage.local`（画像、配置、岗位记录）。
-- 目标站点适配器：站点配置表在 `src/content/extractors.js` 的 `SITES`（域名正则 + 详情页/列表选择器 + 深度抓取策略），当前覆盖 BOSS 直聘 `zhipin.com`、实习僧 `shixiseng.com`、51job 前程无忧 `51job.com`、智联招聘 `zhaopin.com`、牛客网 `nowcoder.com`、应届生求职网 `yingjiesheng.com`、LinkedIn `linkedin.com`、Greenhouse `greenhouse.io`、Lever `lever.co`。**加一个站 = `SITES` 表加一个条目 + manifest 的 matches + 选项页 checkbox**（列表公司名需要精确子选择器时可加 `cardCompany`）（能读到完整 JD 的还要进 `prompts.js` 的 `FULL_JD_SITES`）。`generic` 分支用于企业官网等任意页面：优先解析 schema.org 的 `JobPosting` JSON-LD 结构化数据，配 ATS 风格选择器兜底；manifest 只静态注入表内站点，`generic` 需要**用户在看板点「在本页启用」**经 `chrome.scripting.executeScript` 按次注入（`activeTab` 授权，见 P4 一节）。
+- 目标站点适配器：站点配置表在 `src/content/extractors.js` 的 `SITES`（域名正则 + 详情页/列表选择器 + 深度抓取策略），当前覆盖 BOSS 直聘 `zhipin.com`、实习僧 `shixiseng.com`、51job 前程无忧 `51job.com`、智联招聘 `zhaopin.com`、牛客网 `nowcoder.com`、应届生求职网 `yingjiesheng.com`、北森 ATS `zhiye.com`、Moka ATS `mokahr.com`、飞书招聘 `jobs.feishu.cn`、LinkedIn `linkedin.com`、Greenhouse `greenhouse.io`、Lever `lever.co`。**加一个站 = `SITES` 表加一个条目 + manifest 的 matches + 选项页 checkbox**（列表公司名需要精确子选择器时可加 `cardCompany`）（能读到完整 JD 的还要进 `prompts.js` 的 `FULL_JD_SITES`）。`generic` 分支用于企业官网等任意页面：优先解析 schema.org 的 `JobPosting` JSON-LD 结构化数据，配 ATS 风格选择器兜底；manifest 只静态注入表内站点，`generic` 需要**用户在看板点「在本页启用」**经 `chrome.scripting.executeScript` 按次注入（`activeTab` 授权，见 P4 一节）。
 
 ## 2. 目录结构
 
@@ -130,7 +130,7 @@ User：注入 profile 各字段 + Job(title/company/location/salary/description)
 ```
 解析：优先 `response_format={type:"json_object"}`（Anthropic 不支持，靠提示词 + 正则兜底抠出首个 `{...}`）。详情页结果含 `advice` 求职建议；批量扫描为提速不要求 `reasons`/`advice`。
 
-两条链路的输入不同：**单岗位**用简历全文 + JD（限 4000 字）；**批量**用简历摘要（超 1200 字的简历先由 LLM 压成 ≤350 字结构化摘要，按内容哈希缓存，失败降级为截断全文）+ JD（能读到完整 JD 的 zhipin/shixiseng/nowcoder/zhaopin 限 2200 字，只有卡片摘要的 51job/yingjiesheng 限 800 字）。两条链路共用一套评分锚点（90-100/75-89/50-74/25-49/0-24，硬门槛不满足封顶 24，硬门槛按实习/校招/社招分别判断），避免分数扎堆。打招呼语在已打分的岗位上会注入 `matched` 命中点，保证文案与面板展示一致。
+两条链路的输入不同：**单岗位**用简历全文 + JD（限 4000 字）；**批量**用简历摘要（超 1200 字的简历先由 LLM 压成 ≤350 字结构化摘要，按内容哈希缓存，失败降级为截断全文）+ JD（能读到完整 JD 的 zhipin/shixiseng/nowcoder/zhaopin/zhiye/moka/feishu 限 2200 字，只有卡片摘要的 51job/yingjiesheng 限 800 字）。两条链路共用一套评分锚点（90-100/75-89/50-74/25-49/0-24，硬门槛不满足封顶 24，硬门槛按实习/校招/社招分别判断），避免分数扎堆。打招呼语在已打分的岗位上会注入 `matched` 命中点，保证文案与面板展示一致。
 
 ### 打招呼语 / 求职信
 基于 JD + 简历亮点，生成 120-200 字中文打招呼语（Boss直聘风格）或可选求职信；真实、突出匹配点、给出一个可追问的项目亮点；不编造经历。
@@ -138,10 +138,10 @@ User：注入 profile 各字段 + Job(title/company/location/salary/description)
 ## 6. UI 行为
 
 - **悬浮面板**：注入到页面右侧，可折叠、可拖拽到任意位置（拖标题栏或顶部岗位信息区，仅标题栏需留在屏幕内）、可关闭（会话级，刷新恢复）；折叠与位置按站存 localStorage。进入岗位详情页自动抓取并显示「抓取到的岗位信息 + [开始匹配] 按钮」；未配置 API Key 时显示引导横幅（经 `OPEN_OPTIONS` 消息可直达选项页）；错误按类型分流（未配置 / 401 / 429 各配一个下一步按钮）；首页/登录页等识别不到岗位的页面收起为静默胶囊。点击后调用 SCORE_JOB，展示分数环（颜色：≥75 绿 recommend / 50-74 黄 consider / <50 红 skip）、matched/missing 标签、reasons，及 [生成打招呼语] [保存到看板] 按钮。
-- **列表页批量扫描**：面板提供 [扫描本页岗位]，提取列表项（SITES 表给出 cards 选择器）→ 逐个（限流）打分 → 在列表项上打角标高亮，面板内出分数排名列表（每行含 [打招呼] [保存]，顶部含 [全部保存到看板]）。**扫描不会自动写入看板**，入库只能由用户点 [保存] / [全部保存] 触发。深度抓取策略在 SITES 表的 `deepScan` 字段：实习僧、智联、牛客是 `fetch`——按 `maxScanConcurrency` 并发抓取同源详情页（`api.fetchJobDetail`，同源校验、`credentials:"include"`、失败回退卡片文字）；BOSS 直聘是 `click`——`/web/geek/jobs` 列表页点卡片在同页右侧详情面板渲染完整 JD，逐个 `card.click()` 轮询 `api.readOpenJd()`（类名优先，「职位描述」标题锚定兜底，单条超时回退卡片摘要，先点最后一张挪开初始选中）；51job、应届生都是 `""`——不批量请求详情页，按卡片文字打粗分；51job 的岗位链接由埋点属性里的 `jobId` 拼 `https://jobs.51job.com/all/<jobId>.html`，应届生详情页标题/公司/JD 分别读取 `.detail-title-left-top .job`、`.detail-content-compnav-center`、`.jobinfo`；直接访问可能遇到阿里云滑动验证，扩展不绕过。Greenhouse/Lever 也不深度抓取（列表项自带完整 JD 或 JSON-LD）。
+- **列表页批量扫描**：面板提供 [扫描本页岗位]，提取列表项（SITES 表给出 cards 选择器）→ 逐个（限流）打分 → 在列表项上打角标高亮，面板内出分数排名列表（每行含 [打招呼] [保存]，顶部含 [全部保存到看板]）。**扫描不会自动写入看板**，入库只能由用户点 [保存] / [全部保存] 触发。深度抓取策略在 SITES 表的 `deepScan` 字段：实习僧、智联、牛客、飞书是 `fetch`——按 `maxScanConcurrency` 并发抓取同源详情页（`api.fetchJobDetail`，同源校验、`credentials:"include"`、失败回退卡片文字；飞书详情页纯前端渲染，fetch HTML 是空壳，配 `fetchDetail` 钩子改抓同源岗位 JSON API）；BOSS 直聘是 `click`——`/web/geek/jobs` 列表页点卡片在同页右侧详情面板渲染完整 JD，逐个 `card.click()` 轮询 `api.readOpenJd()`（类名优先，「职位描述」标题锚定兜底，单条超时回退卡片摘要，先点最后一张挪开初始选中）；Moka 是 `navigate`——经典模板卡片没 JD 且详情是同页 hash 路由（点开后列表卸载），逐岗 `location.hash` 跳详情、`readOpenJd` 读 JD、`history.back()` 回列表，卡片已自带全文（新版模板）的岗位直接跳过；北森是 `""`——卡片阶段就由 `listJobs` 钩子拉站点自己的列表接口（同源 + 用户会话）按"卡片标题 === JobAdName"合并完整 JD 与岗位链接（北森卡片内没有链接，`extractJobList` 会丢弃无链接卡片）；51job、应届生都是 `""`——不批量请求详情页，按卡片文字打粗分；51job 的岗位链接由埋点属性里的 `jobId` 拼 `https://jobs.51job.com/all/<jobId>.html`，应届生详情页标题/公司/JD 分别读取 `.detail-title-left-top .job`、`.detail-content-compnav-center`、`.jobinfo`；直接访问可能遇到阿里云滑动验证，扩展不绕过。Greenhouse/Lever 也不深度抓取（列表项自带完整 JD 或 JSON-LD）。扫描结果按岗位 URL 去重（同一岗位只留 JD 更长的一条；Moka 同卡内外双链接依赖此行为）。
 - **SPA 路由**：监听 `popstate` + 每秒轮询 `location.href`，URL 变了就重新抓取。不用 `history.pushState` 打补丁（content script 在隔离世界，页面自己调 pushState 不会触发补丁），也不用全文档 MutationObserver（招聘站 DOM 持续变动，回调会被打满）。初始未识别到岗位时最多重试 5 次，每次 1 秒，处理 SPA 内容晚于 `document_idle` 渲染的情况。
 - **popup 看板**：统计（已扫描/推荐/已投）、关键词搜索、按时间/分数排序、列表（分数、标题、公司、状态、重新打分（对无分记录）、打开原页、删除（二次确认））、筛选（状态）、导出 CSV（随当前筛选与排序）、[在本页启用]（向任意非适配站点按次注入面板，activeTab 授权）、入口到 options。
-- **options**：三块——个人画像（领域下拉 + 简历导入 + 目标岗位/技能/教育/证书/城市/薪资/求职类型）、LLM 配置（含「测试连接」）、站点开关（九个适配站）。
+- **options**：三块——个人画像（领域下拉 + 简历导入 + 目标岗位/技能/教育/证书/城市/薪资/求职类型）、LLM 配置（含「测试连接」）、站点开关（十二个适配站）。
 - **首次运行**：`chrome.runtime.onInstalled` 自动打开选项页引导配置。
 
 ## 7. 隐私与安全

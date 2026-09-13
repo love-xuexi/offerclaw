@@ -56,6 +56,11 @@ const job51Batch = buildBatchScorePrompt(aiProfile, [{ ...job, site: "job51", de
 const descLen = (text) => (text.match(/"description": "([\s\S]*?)"\n/) || ["", ""])[1].length;
 check("批量对 BOSS 放宽到 2200 字", descLen(zhipinBatch.user) > 2000 && descLen(zhipinBatch.user) <= 2200, `${descLen(zhipinBatch.user)} 字`);
 check("批量对 51job 仍限 800 字", descLen(job51Batch.user) <= 800, `${descLen(job51Batch.user)} 字`);
+// 北森/Moka/飞书三家的批量扫描能读到完整 JD，与智联/牛客同一档限长
+for (const site of ["zhiye", "moka", "feishu"]) {
+  const batch = buildBatchScorePrompt(aiProfile, [{ ...job, site, description: longDesc }]);
+  check(`批量对 ${site} 放宽到 2200 字`, descLen(batch.user) > 2000 && descLen(batch.user) <= 2200, `${descLen(batch.user)} 字`);
+}
 check("单岗位限 4000 字", (() => { const m = buildScorePrompt(aiProfile, { ...job, description: "x".repeat(9000) }).user.match(/"description": "([\s\S]*?)"\n/); return m && m[1].length <= 4000; })());
 
 // 6) 批量提示词
