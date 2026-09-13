@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OfferClaw",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI 岗位匹配助手：在 BOSS直聘 / 实习僧 / 51job / 智联 / 牛客 / LinkedIn 等招聘站浏览岗位时，用你自己的 LLM Key 打匹配分、生成打招呼语、管理投递看板",
   "homepage_url": "https://github.com/love-xuexi/offerclaw",
   "background": {
