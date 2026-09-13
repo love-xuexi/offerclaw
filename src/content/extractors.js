@@ -238,8 +238,14 @@
       // 部分租户页面（如合合信息）上没有公司名，靠 title/meta 抠，抠不到留空
       company: [],
       description: ["[class*='STJobDuty']", "[class*='STDutyContainer']", ".pc-job-detail", "[class*='description']"],
-      cards: ["[class*='STListItem']"],
-      cardTitle: "[class*='STJobTitle']",
+      // 新版模板卡片是 STListItem（标题在 STJobTitle 里）；企业定制模板（如中核 /custom/campus）
+      // 卡片是 .job-list .item（标题在 .t，完整 JD 折叠在 .con 里——display:none 但 DOM 里有全文）。
+      // 左侧"招聘单位"筛选栏的条目也叫 .item，必须用 .job-list 作用域排除
+      cards: ["[class*='STListItem']", ".job-list .item"],
+      cardTitle: ["[class*='STJobTitle']", ".t"],
+      cardDescription: [".con"],
+      // 定制模板卡片的公司名在"招聘单位："行里；新版模板卡片没有公司名（返回空，走 companyFrom）
+      cardCompany: (el) => ((el.innerText || "").match(/招聘单位：(.+)/) || [])[1]?.trim() || "",
       // 卡片里没有岗位链接也没有 JD。批量扫描用站点自己的列表接口（页面渲染列表用的同一个，
       // 同源 + 用户会话）：一次分页拉全岗位的完整 JD（Duty+Require），按"卡片标题 === JobAdName"
       // 精确合并，无需逐岗深扫。PageSize=1000 实测服务端照单全收（讯飞 893 岗一次拉全），封顶 2 页
@@ -451,24 +457,31 @@
     if (config.cardExtra) for (const el of document.querySelectorAll(config.cardExtra)) if (!cardSet.has(el) && el.querySelector("[class*='job-name'],[class*='job-title']")) { cards.push(el); cardSet.add(el); }
     const result = [];
     const companySelectors = [".cname", ".company-name", ".boss-name", "[class*='company']", "[class*='boss-name']"];
+    // cardTitle/cardDescription 兼容字符串或数组（北森要同时覆盖新版与企业定制两套模板）；
+    // cardCompany 兼容选择器或 (el) => 文本 的函数（定制模板公司名在"招聘单位："行里）
+    const cardTitleSelectors = [...(Array.isArray(config.cardTitle) ? config.cardTitle : config.cardTitle ? [config.cardTitle] : []), config.cardLink, ".jname", ".title", ".job-name", ".job-title", "[class*='job-name']", "[class*='job-title']", "h3", "h2"].filter(Boolean);
+    const cardDescriptionSelectors = Array.isArray(config.cardDescription) ? config.cardDescription : config.cardDescription ? [config.cardDescription] : [];
     for (const el of cards) {
       const link = config.cardLink ? el.querySelector(config.cardLink) : el.querySelector("a[href]");
+      // a[href] 兜底可能命中 javascript: 伪协议（如北森定制卡里的"立即投递/收藏"），
+      // 不能当岗位 URL，退回 listJobs 合并出的地址
+      const linkUrl = link && /^https?:/i.test(link.href) ? new URL(link.href, location.href).href : "";
       const cardText = cleanText(el);
-      const titleEl = first([config.cardTitle, config.cardLink, ".jname", ".title", ".job-name", ".job-title", "[class*='job-name']", "[class*='job-title']", "h3", "h2"].filter(Boolean), el);
+      const titleEl = first(cardTitleSelectors, el);
       const title = cleanText(titleEl) || cardText.slice(0, 100);
       const supplementary = listByTitle?.get(title);
-      const cardUrl = config.cardUrl ? config.cardUrl(el) : link ? new URL(link.href, location.href).href : supplementary?.url || "";
+      const cardUrl = config.cardUrl ? config.cardUrl(el) : linkUrl || supplementary?.url || "";
       // 没解析出岗位链接的"卡片"不是岗位：BOSS 的 li 启发式会把技能标签之类的容器也算进来，
       // 之前用 location.href 兜底，结果排名列表里混进「发表算法相关优秀论文」这种条目，
       // 而且这类条目共用同一个 url，saveJob 按 url 去重时会互相覆盖。
       if (!cardUrl || cardText.length < 10) continue;
-      const companyEl = config.cardCompany
-        ? first([config.cardCompany], el) || first(companySelectors, el)
-        : first(companySelectors, el);
+      const companyText = typeof config.cardCompany === "function"
+        ? config.cardCompany(el) || cleanText(first(companySelectors, el))
+        : cleanText(config.cardCompany ? first([config.cardCompany], el) || first(companySelectors, el) : first(companySelectors, el));
       // 薪资只在卡片自身里找：原来会往上爬 8 层祖先，BOSS 列表页很多卡片写着"面议"，
       // 一爬就把隔壁卡片的薪资当成本卡片的。BOSS 还把薪资数字放在 CSS 生成内容里（文本节点只剩 "-K·薪"），
       // 取不到就留空，面板会显示"薪资待确认"——比显示一个错的数字诚实。
-      result.push({ id: "job-" + Math.random().toString(36).slice(2), site, url: cardUrl, title, company: cleanText(companyEl) || config.companyFrom?.() || "", location: supplementary?.location || cleanText(firstValid([".location", ".area", "[class*='city']"], isCityName, el)), salary: supplementary?.salary || salaryLeaf(el), description: supplementary?.description || (config.cardDescription ? cleanText(first([config.cardDescription], el)) || cardText : cardText), extractedAt: new Date().toISOString(), score: null, verdict: null, matched: [], missing: [], reasons: "", status: "scored", greeting: "", updatedAt: new Date().toISOString(), el });
+      result.push({ id: "job-" + Math.random().toString(36).slice(2), site, url: cardUrl, title, company: companyText || config.companyFrom?.() || "", location: supplementary?.location || cleanText(firstValid([".location", ".area", "[class*='city']"], isCityName, el)), salary: supplementary?.salary || salaryLeaf(el), description: supplementary?.description || cleanText(first(cardDescriptionSelectors, el)) || cardText, extractedAt: new Date().toISOString(), score: null, verdict: null, matched: [], missing: [], reasons: "", status: "scored", greeting: "", updatedAt: new Date().toISOString(), el });
     }
     // 同一岗位 URL 只留一条：Moka 同卡内外两个 <a> 的标题可能差个"急"徽标字，按
     // url|title|company 三元组去重收不掉；保留 JD 更长的那个（整卡链接的文本更全）。

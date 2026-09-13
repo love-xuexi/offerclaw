@@ -55,11 +55,14 @@ check("智联详情页读取 job-info__desc", zhaopinBlock.includes('".job-info_
 
 const zhiyeBlock = extractorSource.match(/zhiye: \{[\s\S]*?\n    \},/)?.[0] || "";
 check("北森列表卡片使用 STListItem 根节点", zhiyeBlock.includes("[class*='STListItem']"));
-check("北森卡片标题使用 STJobTitle", zhiyeBlock.includes("cardTitle: \"[class*='STJobTitle']\""));
+check("北森卡片标题使用 STJobTitle（新版模板）", zhiyeBlock.includes("[class*='STJobTitle']"));
 check("北森详情标题用 STJobName，避免列表卡拼成假岗位", zhiyeBlock.includes("title: [\"[class*='STJobName']\""));
 check("北森详情页读取 STJobDuty JD 容器", zhiyeBlock.includes("[class*='STJobDuty']"));
 check("北森列表接口按标题合并完整 JD", zhiyeBlock.includes("listJobs") && zhiyeBlock.includes("GetJobAdPageList"));
 check("北森列表接口只发同源带凭证请求", zhiyeBlock.includes("location.origin") && zhiyeBlock.includes('credentials: "include"'));
+check("北森兼容企业定制模板卡片", zhiyeBlock.includes('".job-list .item"'));
+check("北森卡片标题/描述兼容两套模板", zhiyeBlock.includes('cardTitle: ["[class*=\'STJobTitle\']", ".t"]') && zhiyeBlock.includes('cardDescription: [".con"]'));
+check("北森定制模板从招聘单位行取公司名", zhiyeBlock.includes("招聘单位："));
 
 const mokaBlock = extractorSource.match(/moka: \{[\s\S]*?\n    \},/)?.[0] || "";
 check("Moka 列表以 #/job 链接为卡片", mokaBlock.includes("cards: [\"a[href*='#/job/']\"]"));
