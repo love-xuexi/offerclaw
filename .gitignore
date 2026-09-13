@@ -1,5 +1,6 @@
 node_modules/
 dist/
+docs/marketing
 
 # 本机 / AI 工具产生的文件，不进开源仓库（可能含本地路径、代理地址等环境信息）
 CODELY.md
