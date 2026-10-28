@@ -67,6 +67,16 @@
           <label>API Key<input type="password" name="apiKey" placeholder="sk-…（仅保存在本机浏览器，不会上传）"></label>
           <label>模型<input name="model" placeholder="例如：deepseek-ai/DeepSeek-V4-Flash"></label>
           <label>温度<input type="number" name="temperature" min="0" max="2" step=".1" placeholder="0.3（0 精确，2 更发散）"></label>
+          <label>推理强度
+          <select name="reasoningEffort">
+            <option value="off">关闭思考（速度最快、省 Token，适合批量）</option>
+            <option value="low">低强度（简短思考）</option>
+            <option value="medium">中等强度（平衡）</option>
+            <option value="high">高强度（深度思考）</option>
+            <option value="max">最大强度（极致推理）</option>
+            <option value="default">默认（由模型自主决定）</option>
+          </select>
+          <small id="reasoningEffortHint">适配 Gemini、DeepSeek、MiMo、GLM 及 OpenAI 标准</small></label>
           <label>扫描并发<input type="number" name="maxScanConcurrency" min="1" max="10" placeholder="5（1-10，同时打分的岗位数）"></label>
           <label>扫描上限<input type="number" name="scanTopN" min="1" max="100" placeholder="20（每次最多扫描的岗位数）"></label>
         </section>

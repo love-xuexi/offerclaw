@@ -10,7 +10,8 @@ export const DEFAULT_PROFILE = {
 };
 export const DEFAULT_CONFIG = {
   provider: "siliconflow", protocol: "openai", baseUrl: "https://api.siliconflow.cn/v1",
-  apiKey: "", model: "deepseek-ai/DeepSeek-V4-Flash", temperature: 0.3, maxScanConcurrency: 5, scanTopN: 20, requestTimeoutMs: 90000
+  apiKey: "", model: "deepseek-ai/DeepSeek-V4-Flash", temperature: 0.3, reasoningEffort: "off",
+  maxScanConcurrency: 5, scanTopN: 20, requestTimeoutMs: 90000
 };
 const read = (key, fallback) => chrome.storage.local.get(key).then((v) => ({ ...fallback, ...(v[key] || {}) }));
 export const getProfile = () => read(PROFILE_KEY, DEFAULT_PROFILE);

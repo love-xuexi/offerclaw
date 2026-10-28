@@ -4,22 +4,60 @@ const redactKey = (text, apiKey) => {
   const safe = apiKey && String(apiKey).length >= 8 ? String(text).split(String(apiKey)).join("***") : String(text);
   return safe.replace(/\b(?:sk|api[-_]?key|token)[-_][A-Za-z0-9]{12,}/gi, "***");
 };
-// 硅基流动的推理模型（如 DeepSeek-V4-Flash）默认开启思维链，评分类结构化任务会显著变慢且更贵；关闭后更快更省。
-const isSiliconFlow = (base) => /siliconflow\./i.test(base);
-function openaiBody({ model, messages, temperature, response_format, siliconflow }) {
-  return JSON.stringify({ model, messages, temperature, ...(response_format ? { response_format } : {}), ...(siliconflow ? { enable_thinking: false } : {}) });
+// 推理强度参数适配：兼容 Gemini、DeepSeek、MiMo、GLM（智谱）、OpenAI 及 SiliconFlow
+function buildOpenAiReasoningParams(reasoningEffort) {
+  if (!reasoningEffort || reasoningEffort === "default") return {};
+  if (reasoningEffort === "off") {
+    return {
+      enable_thinking: false,
+      thinking: { type: "disabled" },
+      thinking_budget: 0
+    };
+  }
+  const effortMap = { low: "low", medium: "medium", high: "high", max: "high" };
+  const effort = effortMap[reasoningEffort] || "medium";
+  return {
+    enable_thinking: true,
+    reasoning_effort: effort,
+    thinking: { type: "enabled" }
+  };
+}
+
+function openaiBody({ model, messages, temperature, response_format, reasoningEffort }) {
+  const reasoningParams = buildOpenAiReasoningParams(reasoningEffort);
+  return JSON.stringify({
+    model,
+    messages,
+    temperature,
+    ...(response_format ? { response_format } : {}),
+    ...reasoningParams
+  });
 }
 // Anthropic 不是 OpenAI 协议：system 是顶层参数、max_tokens 必填、无 response_format（靠提示词 + 正则兜底解析）
-function anthropicBody({ model, messages, temperature, max_tokens = 4096 }) {
+function anthropicBody({ model, messages, temperature, max_tokens = 4096, reasoningEffort }) {
   let system = "";
   const chat = [];
   for (const m of messages) {
     if (m.role === "system") system += (system ? "\n\n" : "") + m.content;
     else chat.push({ role: m.role, content: String(m.content) });
   }
-  return JSON.stringify({ model, max_tokens, ...(system ? { system } : {}), messages: chat, ...(temperature != null ? { temperature } : {}) });
+  let thinking;
+  if (reasoningEffort === "off") {
+    thinking = { type: "disabled" };
+  } else if (["low", "medium", "high", "max"].includes(reasoningEffort)) {
+    const budgetMap = { low: 1024, medium: 2048, high: 4096, max: 8192 };
+    thinking = { type: "enabled", budget_tokens: budgetMap[reasoningEffort] || 2048 };
+  }
+  return JSON.stringify({
+    model,
+    max_tokens,
+    ...(system ? { system } : {}),
+    messages: chat,
+    ...(temperature != null ? { temperature } : {}),
+    ...(thinking ? { thinking } : {})
+  });
 }
-export async function chatCompletion({ protocol = "openai", baseUrl, apiKey, model, messages, temperature, response_format, timeoutMs = 90000 }) {
+export async function chatCompletion({ protocol = "openai", baseUrl, apiKey, model, messages, temperature, response_format, reasoningEffort = "off", timeoutMs = 90000 }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const base = normalizeUrl(baseUrl);
@@ -28,11 +66,11 @@ export async function chatCompletion({ protocol = "openai", baseUrl, apiKey, mod
     if (protocol === "anthropic") {
       url = base + "/v1/messages";
       headers = { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" };
-      body = anthropicBody({ model, messages, temperature });
+      body = anthropicBody({ model, messages, temperature, reasoningEffort });
     } else {
       url = base + "/chat/completions";
       headers = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` };
-      body = openaiBody({ model, messages, temperature, response_format, siliconflow: isSiliconFlow(base) });
+      body = openaiBody({ model, messages, temperature, response_format, reasoningEffort });
     }
     const response = await fetch(url, { method: "POST", headers, body, signal: controller.signal });
     const text = await response.text();

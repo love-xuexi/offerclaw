@@ -34,7 +34,7 @@ const readForm = () => {
     profile: fields(["resumeText", "targetRoles", "skills", "preferredCities", "domain", "education", "certificates", "expectedSalary", "jobType", "extraNotes"], data),
     config: {
       ...config,
-      ...fields(["provider", "baseUrl", "apiKey", "model"], data),
+      ...fields(["provider", "baseUrl", "apiKey", "model", "reasoningEffort"], data),
       protocol: (PROVIDERS[data.provider] || PROVIDERS.custom).protocol,
       temperature: clampNumber(data.temperature, 0.3, 0, 2),
       maxScanConcurrency: clampNumber(data.maxScanConcurrency, 5, 1, 10),

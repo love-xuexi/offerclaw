@@ -18,24 +18,44 @@ function mockFetch(status, body) {
 }
 const messages = [{ role: "system", content: "你是顾问" }, { role: "user", content: "评这个岗位" }];
 
-// 1) OpenAI 协议 - 硅基流动：URL、Bearer、response_format、enable_thinking
+// 1) OpenAI 协议 - 默认/关闭思考（off）：URL、Bearer、response_format、enable_thinking: false
 mockFetch(200, { choices: [{ message: { content: '{"score":80}' } }] });
-await chatCompletion({ protocol: "openai", baseUrl: "https://api.siliconflow.cn/v1", apiKey: "sk-test", model: "deepseek-ai/DeepSeek-V4-Flash", messages, temperature: 0.3, response_format: { type: "json_object" }, timeoutMs: 5000 });
+await chatCompletion({ protocol: "openai", baseUrl: "https://api.siliconflow.cn/v1", apiKey: "sk-test", model: "deepseek-ai/DeepSeek-V4-Flash", messages, temperature: 0.3, response_format: { type: "json_object" }, reasoningEffort: "off", timeoutMs: 5000 });
 check("openai URL=/chat/completions", lastCall.url.endsWith("/chat/completions"), lastCall.url);
 check("openai Bearer 头", lastCall.opts.headers.Authorization === "Bearer sk-test");
 const oBody = JSON.parse(lastCall.opts.body);
 check("openai body 含 response_format", JSON.stringify(oBody.response_format) === JSON.stringify({ type: "json_object" }));
-check("openai 硅基流动关思维链", oBody.enable_thinking === false);
+check("openai off 模式关思维链", oBody.enable_thinking === false && oBody.thinking?.type === "disabled" && oBody.thinking_budget === 0);
 check("openai body 含 model/messages/temperature", oBody.model && Array.isArray(oBody.messages) && oBody.temperature === 0.3);
 
-// 2) OpenAI 协议 - 非硅基流动（DeepSeek）：不发 enable_thinking
+// 2) 推理强度多档位测试（Gemini/DeepSeek/MiMo/GLM）
+// 2.1) default 档位：不注入多余推理字段
 mockFetch(200, { choices: [{ message: { content: "ok" } }] });
-await chatCompletion({ protocol: "openai", baseUrl: "https://api.deepseek.com/v1", apiKey: "sk-d", model: "deepseek-chat", messages, response_format: { type: "json_object" }, timeoutMs: 5000 });
-const dBody = JSON.parse(lastCall.opts.body);
-check("openai 非硅基流动不发 enable_thinking", !("enable_thinking" in dBody));
+await chatCompletion({ protocol: "openai", baseUrl: "https://api.deepseek.com/v1", apiKey: "sk-d", model: "deepseek-chat", messages, reasoningEffort: "default", response_format: { type: "json_object" }, timeoutMs: 5000 });
+const defBody = JSON.parse(lastCall.opts.body);
+check("openai default 档位不发 enable_thinking", !("enable_thinking" in defBody));
+check("openai default 档位不发 reasoning_effort", !("reasoning_effort" in defBody));
+check("openai default 档位不发 thinking", !("thinking" in defBody));
+
+// 2.2) high 档位：发 enable_thinking: true, reasoning_effort: "high", thinking: { type: "enabled" }
 mockFetch(200, { choices: [{ message: { content: "hello-world" } }] });
-const res2 = await chatCompletion({ protocol: "openai", baseUrl: "https://api.deepseek.com/v1", apiKey: "sk-d", model: "deepseek-chat", messages, response_format: { type: "json_object" }, timeoutMs: 5000 });
-check("openai 响应解析 content", res2.ok && res2.content === "hello-world");
+const resHigh = await chatCompletion({ protocol: "openai", baseUrl: "https://open.bigmodel.cn/api/paas/v4", apiKey: "sk-glm", model: "glm-4.6", messages, reasoningEffort: "high", timeoutMs: 5000 });
+const highBody = JSON.parse(lastCall.opts.body);
+check("openai high 档位 enable_thinking 为 true", highBody.enable_thinking === true);
+check("openai high 档位 reasoning_effort 为 high", highBody.reasoning_effort === "high");
+check("openai high 档位 thinking 为 enabled", highBody.thinking?.type === "enabled");
+check("openai 响应解析 content", resHigh.ok && resHigh.content === "hello-world");
+
+// 2.3) max / low / medium 档位映射
+mockFetch(200, { choices: [{ message: { content: "gemini-ok" } }] });
+await chatCompletion({ protocol: "openai", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", apiKey: "sk-gemini", model: "gemini-2.5-flash", messages, reasoningEffort: "max", timeoutMs: 5000 });
+const maxBody = JSON.parse(lastCall.opts.body);
+check("openai max 档位映射 reasoning_effort 为 high", maxBody.reasoning_effort === "high" && maxBody.enable_thinking === true);
+
+mockFetch(200, { choices: [{ message: { content: "mimo-ok" } }] });
+await chatCompletion({ protocol: "openai", baseUrl: "https://api.xiaomi.com/v1", apiKey: "sk-mimo", model: "mimo-v1", messages, reasoningEffort: "low", timeoutMs: 5000 });
+const lowBody = JSON.parse(lastCall.opts.body);
+check("openai low 档位 reasoning_effort 为 low", lowBody.reasoning_effort === "low" && lowBody.enable_thinking === true);
 
 // 3) Anthropic 协议：URL、headers、system 提顶层、max_tokens、无 response_format
 mockFetch(200, { content: [{ type: "text", text: '{"score":90}' }] });
